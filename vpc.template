@@ -128,7 +128,7 @@
     },
     "NATGatewayPerAZ": {
       "Default": "false",
-      "Description": "Create separate NAT Gateway per Availability Zone.",
+      "Description": "Set to true will create separate NAT Gateway per Availability Zone.",
       "AllowedValues": [
           "true",
           "false"
@@ -144,6 +144,24 @@
             },
             "3"
         ]
+    },
+    "MultiNATGateway": {
+      "Fn::Equals": [
+          {
+              "Ref": "NATGatewayPerAZ"
+          },
+          "true"
+      ]
+    },
+    "MultiNATGateway&3AZCondition": {
+      "Fn::And": [
+          {
+              "Condition": "MultiNATGateway"
+          },
+          {
+              "Condition": "3AZCondition"
+          }
+      ]
     }
   },
   "Resources": {
@@ -368,7 +386,7 @@
             "MapPublicIpOnLaunch": true
         }
     },
-    "PrivateSubnetRouteTable": {
+    "PrivateSubnet1RouteTable": {
         "Type": "AWS::EC2::RouteTable",
         "Properties": {
             "VpcId": {
@@ -377,7 +395,7 @@
             "Tags": [
                 {
                     "Key": "Name",
-                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "private-rt"] ] }
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "private-rt-1"] ] }
                 },
                 {
                     "Key": "Network",
@@ -386,11 +404,11 @@
             ]
         }
     },
-    "PrivateSubnetRoute": {
+    "PrivateSubnet1Route": {
         "Type": "AWS::EC2::Route",
         "Properties": {
             "RouteTableId": {
-                "Ref": "PrivateSubnetRouteTable"
+                "Ref": "PrivateSubnet1RouteTable"
             },
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": {
@@ -405,7 +423,39 @@
                 "Ref": "PrivateSubnet1"
             },
             "RouteTableId": {
-                "Ref": "PrivateSubnetRouteTable"
+                "Ref": "PrivateSubnet1RouteTable"
+            }
+        }
+    },
+    "PrivateSubnet2RouteTable": {
+        "Condition": "MultiNATGateway",
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+            "VpcId": {
+                "Ref": "VPC"
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "private-rt-2"] ] }
+                },
+                {
+                    "Key": "Network",
+                    "Value": "Private"
+                }
+            ]
+        }
+    },
+    "PrivateSubnet2Route": {
+      "Condition": "MultiNATGateway",
+        "Type": "AWS::EC2::Route",
+        "Properties": {
+            "RouteTableId": {
+                "Ref": "PrivateSubnet2RouteTable"
+            },
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": {
+              "Ref": "NATGateway2"
             }
         }
     },
@@ -416,7 +466,47 @@
                 "Ref": "PrivateSubnet2"
             },
             "RouteTableId": {
-                "Ref": "PrivateSubnetRouteTable"
+              "Fn::If": [
+                  "MultiNATGateway",
+                  {
+                      "Ref": "PrivateSubnet2RouteTable"
+                  },
+                  {
+                      "Ref": "PrivateSubnet1RouteTable"
+                  }
+              ]
+            }
+        }
+    },
+    "PrivateSubnet3RouteTable": {
+        "Condition": "MultiNATGateway&3AZCondition",
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+            "VpcId": {
+                "Ref": "VPC"
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "private-rt-3"] ] }
+                },
+                {
+                    "Key": "Network",
+                    "Value": "Private"
+                }
+            ]
+        }
+    },
+    "PrivateSubnet3Route": {
+        "Condition": "MultiNATGateway&3AZCondition",
+        "Type": "AWS::EC2::Route",
+        "Properties": {
+            "RouteTableId": {
+                "Ref": "PrivateSubnet3RouteTable"
+            },
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": {
+              "Ref": "NATGateway3"
             }
         }
     },
@@ -428,7 +518,15 @@
                 "Ref": "PrivateSubnet3"
             },
             "RouteTableId": {
-                "Ref": "PrivateSubnetRouteTable"
+              "Fn::If": [
+                  "MultiNATGateway",
+                  {
+                      "Ref": "PrivateSubnet3RouteTable"
+                  },
+                  {
+                      "Ref": "PrivateSubnet1RouteTable"
+                  }
+              ]
             }
         }
     },
@@ -516,7 +614,85 @@
             },
             "SubnetId": {
                 "Ref": "PublicSubnet1"
-            }
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "nat-gateway-1"] ] }
+                },
+                {
+                    "Key": "Network",
+                    "Value": "Private"
+                }
+            ]
+        }
+    },
+    "NATEIP2": {
+        "Condition": "MultiNATGateway",
+        "DependsOn": "VPCGatewayAttachment",
+        "Type": "AWS::EC2::EIP",
+        "Properties": {
+            "Domain": "vpc"
+        }
+    },
+    "NATGateway2": {
+        "Condition": "MultiNATGateway",
+        "DependsOn": "VPCGatewayAttachment",
+        "Type": "AWS::EC2::NatGateway",
+        "Properties": {
+            "AllocationId": {
+                "Fn::GetAtt": [
+                    "NATEIP2",
+                    "AllocationId"
+                ]
+            },
+            "SubnetId": {
+                "Ref": "PublicSubnet2"
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "nat-gateway-2"] ] }
+                },
+                {
+                    "Key": "Network",
+                    "Value": "Private"
+                }
+            ]
+        }
+    },
+    "NATEIP3": {
+        "Condition": "MultiNATGateway&3AZCondition",
+        "DependsOn": "VPCGatewayAttachment",
+        "Type": "AWS::EC2::EIP",
+        "Properties": {
+            "Domain": "vpc"
+        }
+    },
+    "NATGateway3": {
+        "Condition": "MultiNATGateway&3AZCondition",
+        "DependsOn": "VPCGatewayAttachment",
+        "Type": "AWS::EC2::NatGateway",
+        "Properties": {
+            "AllocationId": {
+                "Fn::GetAtt": [
+                    "NATEIP3",
+                    "AllocationId"
+                ]
+            },
+            "SubnetId": {
+                "Ref": "PublicSubnet3"
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "nat-gateway-3"] ] }
+                },
+                {
+                    "Key": "Network",
+                    "Value": "Private"
+                }
+            ]
         }
     }
   },
