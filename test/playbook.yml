@@ -1,0 +1,5 @@
+---
+- name: configure nginx
+  hosts: localhost
+  roles:
+    - nginx
