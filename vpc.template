@@ -62,10 +62,37 @@
               "AnsiblePlaybook",
               "ServerType"
             ]
+        },
+        {
+            "Label": {
+                "default": "Database Cluster Configuration"
+            },
+            "Parameters": [
+              "DBClusterName",
+              "DBUsername",
+              "DBPassword",
+              "DBName",
+              "DBInstanceType"
+            ]
         }
 
       ],
       "ParameterLabels": {
+        "DBClusterName" : {
+          "default" : "DB Cluster Name"
+        },
+        "DBUsername" : {
+          "default" : "DB Username"
+        },
+        "DBPassword" : {
+          "default" : "DB Password"
+        },
+        "DBName" : {
+          "default" : "DB Name"
+        },
+        "DBInstanceType" : {
+          "default" : "DB Instance Type"
+        },
         "RemoteIP" : {
             "default" : "Remote IP range allowed to SSH to Jump Host instance"
         },
@@ -142,6 +169,48 @@
     }
   },
   "Parameters": {
+    "DBInstanceType": {
+       "Description": "Aurora instance type",
+       "Type": "String",
+       "Default": "db.t2.small",
+       "ConstraintDescription": "must be a valid RDS instance type."
+   },
+   "DBClusterName": {
+       "Description": "The string that will be Aurora cluster name",
+       "Type": "String",
+       "Default" : "wordpress",
+       "MinLength": "3",
+       "MaxLength": "10",
+       "AllowedPattern": "[a-z0-9 -]*",
+       "ConstraintDescription": "Identifier names must be 3-6 characters and contain only a-z and 0-9."
+   },
+   "DBUsername": {
+       "Description": "Aurora instance Master Username",
+       "Type": "String",
+       "Default" : "wordpress",
+       "MinLength": "4",
+       "MaxLength": "15",
+       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+       "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+   },
+   "DBName": {
+       "Description": "Database Name",
+       "Type": "String",
+       "Default" : "wordpress",
+       "MinLength": "4",
+       "MaxLength": "16",
+       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+       "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+   },
+   "DBPassword": {
+       "Description": "Aurora instance Master Password",
+       "NoEcho": "true",
+       "Type": "String",
+       "MinLength": "8",
+       "MaxLength": "41",
+       "AllowedPattern": "[a-zA-Z0-9]*",
+       "ConstraintDescription": "DB Password must be 8-41 characters and contain only alpha numeric characters."
+   },
     "ServerType": {
       "Type": "String",
       "Description": "Web server type"
@@ -876,7 +945,7 @@
           }
         ]
       },
-      "DependsOn" : "NATGateway1"
+      "DependsOn" : "DatabasePrimaryInstance"
     },
     "LaunchConfig" : {
       "Type" : "AWS::AutoScaling::LaunchConfiguration",
@@ -1088,13 +1157,112 @@
         ],
         "VpcId" : { "Ref" : "VPC" }
       }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "DB subnet group for Aurora instances",
+        "SubnetIds": [
+          { "Ref" : "PrivateSubnet1" },
+          { "Ref" : "PrivateSubnet2" },
+          {
+            "Fn::If": [
+                "3AZCondition",
+                {
+                    "Ref": "PrivateSubnet3"
+                },
+                {
+                    "Ref": "AWS::NoValue"
+                }
+            ]
+          }
+        ],
+        "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "db-subnet-group"] ] }
+                }
+        ]
+    },
+    "DependsOn" : "NATGateway1"
+  },
+  "DBCluster": {
+    "Type": "AWS::RDS::DBCluster",
+    "Properties": {
+        "DBClusterIdentifier" : { "Ref" : "DBClusterName" },
+        "Engine": "aurora",
+        "MasterUsername": {
+            "Ref": "DBUsername"
+        },
+        "DatabaseName" : { "Ref" : "DBName" },
+        "MasterUserPassword": {
+            "Ref": "DBPassword"
+        },
+        "DBSubnetGroupName": {
+            "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+            {
+                "Ref": "DBSecurityGroup"
+            }
+        ]
     }
+  },
+  "DatabasePrimaryInstance": {
+    "Type": "AWS::RDS::DBInstance",
+    "Properties": {
+        "DBClusterIdentifier": {
+            "Ref": "DBCluster"
+        },
+        "DBInstanceClass": {
+            "Ref": "DBInstanceType"
+        },
+        "Engine": "aurora",
+        "DBSubnetGroupName": {
+            "Ref": "DBSubnetGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags" : [ { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "db-instance"] ] } }]
+    }
+  },
+  "DatabaseReplicaInstance": {
+    "Type": "AWS::RDS::DBInstance",
+    "Properties": {
+        "DBClusterIdentifier": {
+            "Ref": "DBCluster"
+        },
+        "DBInstanceClass": {
+            "Ref": "DBInstanceType"
+        },
+        "Engine": "aurora",
+        "DBSubnetGroupName": {
+            "Ref": "DBSubnetGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags" : [ { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "db-replica"] ] } }]
+    }
+  },
+  "DBSecurityGroup" : {
+			"Type" : "AWS::EC2::SecurityGroup",
+			"Properties" : {
+        "GroupName": { "Fn::Join" : [ "-", [ { "Ref" : "AWS::StackName" }, "db-sg"] ] },
+				"GroupDescription" : "SecurityGroup for DB",
+				"VpcId" : { "Ref" : "VPC" },
+				"SecurityGroupIngress" : [
+					{ "IpProtocol" : "tcp", "FromPort" : "3306", "ToPort" : "3306", "SourceSecurityGroupId" : { "Ref" : "AppSecurityGroup" } }
+				]
+			}
+	}
 
   },
   "Outputs": {
     "JumpHostIP" : {
       "Value" : { "Ref" : "JumpHostEIP" },
       "Description" : "Jump Host IP for SSH access"
+    },
+    "DatabaseEndpoint" : {
+      "Value" : { "Fn::GetAtt": [ "DBCluster", "Endpoint.Address" ] },
+      "Description" : "Database Endpoint"
     },
     "WebsiteURL" : {
     "Value" : { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}, "/" ]]},

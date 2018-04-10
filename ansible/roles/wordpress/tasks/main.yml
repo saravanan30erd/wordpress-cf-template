@@ -1,0 +1,56 @@
+---
+- name: update all the packages
+  yum:
+    name: '*'
+    state: latest
+
+- name: install the apache and php
+  yum:
+    name: "{{ item }}"
+    state: present
+    with_items:
+      - httpd
+      - php
+      - php-mysql
+      - php-gd
+  notify:
+    - restart apache
+
+- name: install the wp-cli tool
+  get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /usr/local/bin/wp
+    mode: 0755
+    owner: root
+    group: root
+
+- name: ensure the apache default document root exists
+  file:
+    path: /var/www/html
+    state: directory
+
+- name: only install wordpress when there is no previous installation
+  stat:
+    path: "/var/www/html/index.php"
+  register: stat_result
+
+- name: download the wordpress
+  command: /usr/local/bin/wp core download --version="{{ wp_version }}" --quiet
+  args:
+    chdir: /var/www/html
+  when: stat_result.stat.exists == False
+  register: wp_install
+
+- name: create the wp-config.php file
+  command: /usr/local/bin/wp core config --dbname="{{ db_name }}" --dbuser="{{ db_user }}" --dbpass="{{ db_password }}" --dbhost="{{ db_host }}"
+  args:
+    chdir: /var/www/html
+  when: wp_install.changed
+
+- name: install the wordpress
+  command: /usr/local/bin/wp core install --url="{{ wp_siteurl }}" --title="{{ wp_title }}" --admin_user="{{ wp_admin_user }}" --admin_password="{{ wp_admin_password }}" --admin_email="{{ wp_admin_email }}"
+  args:
+    chdir: /var/www/html
+  when: wp_install.changed
+  notify:
+    - restart apache

@@ -1,0 +1,5 @@
+---
+- name: install and configure the apache and wordpress
+  hosts: localhost
+  roles:
+    - wordpress
