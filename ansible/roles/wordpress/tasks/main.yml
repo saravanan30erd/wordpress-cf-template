@@ -8,11 +8,11 @@
   yum:
     name: "{{ item }}"
     state: present
-    with_items:
-      - httpd
-      - php
-      - php-mysql
-      - php-gd
+  with_items:
+    - httpd
+    - php
+    - php-mysql
+    - php-gd
   notify:
     - restart apache
 
@@ -54,3 +54,6 @@
   when: wp_install.changed
   notify:
     - restart apache
+
+- name: update the apache permission
+  file: dest=/var/www/html owner=apache group=apache recurse=yes
