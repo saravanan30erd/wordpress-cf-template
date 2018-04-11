@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Template to create a VPC with public and private subnets with NAT Gateway",
+  "Description": "Template to setup High Availability WordPress site",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
@@ -38,7 +38,9 @@
                 "MaximumInstances",
                 "KeyName",
                 "AppImageId",
-                "InstanceType"
+                "InstanceType",
+                "MaxBatchSize",
+                "MinInstancesInService"
             ]
         },
         {
@@ -89,6 +91,12 @@
 
       ],
       "ParameterLabels": {
+        "MinInstancesInService": {
+          "default" : "AutoScaling Rolling Update MinInstancesInService"
+        },
+        "MaxBatchSize": {
+          "default": "AutoScaling Rolling Update MaxBatchSize"
+        },
         "WPVersion": {
           "default" : "WordPress Version"
         },
@@ -192,6 +200,16 @@
     }
   },
   "Parameters": {
+    "MinInstancesInService": {
+      "Description" : "Specifies the minimum number of instances that must be in service within the Auto Scaling group while AWS CloudFormation updates old instances.",
+      "Default": 1,
+      "Type": "Number"
+    },
+    "MaxBatchSize": {
+      "Description": "Specifies the maximum number of instances that AWS CloudFormation updates.",
+      "Default": 1,
+      "Type": "Number"
+    },
     "WPVersion": {
       "Description" : "WordPress Version to install",
       "Default" : "latest",
@@ -260,7 +278,7 @@
        "ConstraintDescription": "DB Password must be 8-41 characters and contain only alpha numeric characters."
    },
     "AnsibleRepository": {
-        "Default": "https://github.com/ansible/ansible-examples.git",
+        "Default": "https://github.com/saravanan30erd/wordpress-cf-template.git",
         "Description": "The git repository URL of WordPress Deployment ansible playbook",
         "Type": "String"
     },
@@ -979,8 +997,8 @@
         "MinSize" : { "Ref" : "MinimumInstances" },
         "MaxSize" : { "Ref" : "MaximumInstances" },
         "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ],
-        "HealthCheckGracePeriod" : 360,
-        "HealthCheckType" : "EC2",
+        "HealthCheckGracePeriod" : 600,
+        "HealthCheckType" : "ELB",
         "DesiredCapacity" : { "Ref" : "DesiredCapacity" },
         "Tags" : [ {
           "Key" : "Name",
@@ -988,6 +1006,20 @@
           "PropagateAtLaunch" : "true"
           }
         ]
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M",
+          "Count"   : "1"
+        }
+      },
+      "UpdatePolicy" : {
+        "AutoScalingRollingUpdate" : {
+        "MaxBatchSize" : {"Ref" : "MaxBatchSize"},
+        "MinInstancesInService" : {"Ref" : "MinInstancesInService"},
+        "PauseTime" : "PT15M",
+        "WaitOnResourceSignals": "true"
+        }
       },
       "DependsOn" : "DatabasePrimaryInstance"
     },
@@ -1006,7 +1038,7 @@
                        "sleep 10\n",
                        "yum update -y\n",
                        "done\n",
-                       "yum install python27 python27-pip git -y\n",
+                       "yum install python27 python27-pip git aws-cfn-bootstrap -y\n",
                        "pip install ansible\n",
                        "/usr/local/bin/ansible-pull -U ", {"Ref": "AnsibleRepository"},
                        " -C ", {"Ref": "AnsibleBranch"},
@@ -1021,7 +1053,11 @@
                        " -e wp_admin_user=", {"Ref": "WPAdminUser"},
                        " -e wp_admin_password=", {"Ref": "WPAdminPassword"},
                        " -e wp_admin_email=", {"Ref": "WPAdminEmail"},
-                       " -o", "\n"
+                       " -o\n",
+                       "/opt/aws/bin/cfn-signal -e $? ",
+                       "         --stack ", { "Ref" : "AWS::StackName" },
+                       "         --resource AppServerGroup ",
+                       "         --region ", { "Ref" : "AWS::Region" }, "\n"
         ]]}}
       },
       "DependsOn": ["DatabasePrimaryInstance","ApplicationLoadBalancer"]
