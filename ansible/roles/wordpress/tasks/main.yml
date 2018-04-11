@@ -4,7 +4,7 @@
     name: '*'
     state: latest
 
-- name: install the apache and php
+- name: install the apache, php and mysql client packages
   yum:
     name: "{{ item }}"
     state: present
@@ -13,6 +13,7 @@
     - php
     - php-mysql
     - php-gd
+    - mysql
   notify:
     - restart apache
 

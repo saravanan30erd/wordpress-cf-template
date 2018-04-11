@@ -59,8 +59,7 @@
             "Parameters": [
               "AnsibleRepository",
               "AnsibleBranch",
-              "AnsiblePlaybook",
-              "ServerType"
+              "AnsiblePlaybook"
             ]
         },
         {
@@ -74,10 +73,37 @@
               "DBName",
               "DBInstanceType"
             ]
+        },
+        {
+            "Label": {
+                "default": "WordPress Configuration"
+            },
+            "Parameters": [
+              "WPVersion",
+              "WPTitle",
+              "WPAdminUser",
+              "WPAdminPassword",
+              "WPAdminEmail"
+            ]
         }
 
       ],
       "ParameterLabels": {
+        "WPVersion": {
+          "default" : "WordPress Version"
+        },
+        "WPTitle": {
+          "default" : "WordPress Title"
+        },
+        "WPAdminUser": {
+          "default" : "WordPress Admin Username"
+        },
+        "WPAdminPassword": {
+          "default" : "WordPress Admin Password"
+        },
+        "WPAdminEmail" : {
+          "default" : "WordPress Admin Email"
+        },
         "DBClusterName" : {
           "default" : "DB Cluster Name"
         },
@@ -161,14 +187,36 @@
         },
         "AnsiblePlaybook": {
             "default": "Ansible playbook"
-        },
-        "ServerType": {
-            "default": "web server type"
         }
       }
     }
   },
   "Parameters": {
+    "WPVersion": {
+      "Description" : "WordPress Version to install",
+      "Default" : "latest",
+      "Type" : "String"
+    },
+    "WPTitle": {
+      "Description" : "Provide Title for the WordPress site",
+      "Default" : "Hello World",
+      "Type": "String"
+    },
+    "WPAdminUser": {
+      "Description" : "Provide Username for WordPress site admin",
+      "Default" : "admin",
+      "Type": "String"
+    },
+    "WPAdminPassword": {
+      "Description" : "Provide Password for WordPress site admin user",
+      "Default" : "admin",
+      "Type" : "String"
+    },
+    "WPAdminEmail" : {
+      "Description" : "Provide Email ID for WordPress site admin user",
+      "Default" : "admin@example.com",
+      "Type": "String"
+    },
     "DBInstanceType": {
        "Description": "Aurora instance type",
        "Type": "String",
@@ -211,10 +259,6 @@
        "AllowedPattern": "[a-zA-Z0-9]*",
        "ConstraintDescription": "DB Password must be 8-41 characters and contain only alpha numeric characters."
    },
-    "ServerType": {
-      "Type": "String",
-      "Description": "Web server type"
-    },
     "AnsibleRepository": {
         "Default": "https://github.com/ansible/ansible-examples.git",
         "Description": "The git repository URL of WordPress Deployment ansible playbook",
@@ -226,7 +270,7 @@
         "Type": "String"
     },
     "AnsiblePlaybook": {
-        "Default": "wordpress.yml",
+        "Default": "ansible/wordpress.yml",
         "Description": "Ansible playbook to use",
         "Type": "String"
     },
@@ -967,10 +1011,20 @@
                        "/usr/local/bin/ansible-pull -U ", {"Ref": "AnsibleRepository"},
                        " -C ", {"Ref": "AnsibleBranch"},
                        " ", {"Ref": "AnsiblePlaybook"},
-                       " -e server_type=", {"Ref": "ServerType"},
+                       " -e wp_version=", {"Ref": "WPVersion"},
+                       " -e db_user=", {"Ref": "DBUsername"},
+                       " -e db_name=", {"Ref": "DBName"},
+                       " -e db_password=", {"Ref": "DBPassword"},
+                       " -e db_host=", { "Fn::GetAtt": [ "DBCluster", "Endpoint.Address" ] },
+                       " -e wp_title=", {"Ref": "WPTitle"},
+                       " -e wp_siteurl=", { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]} ]]},
+                       " -e wp_admin_user=", {"Ref": "WPAdminUser"},
+                       " -e wp_admin_password=", {"Ref": "WPAdminPassword"},
+                       " -e wp_admin_email=", {"Ref": "WPAdminEmail"},
                        " -o", "\n"
         ]]}}
-      }
+      },
+      "DependsOn": ["DatabasePrimaryInstance","ApplicationLoadBalancer"]
     },
     "WebServerScaleUpPolicy" : {
     "Type" : "AWS::AutoScaling::ScalingPolicy",
