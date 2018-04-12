@@ -1350,10 +1350,6 @@
       "Value" : { "Ref" : "JumpHostEIP" },
       "Description" : "Jump Host IP for SSH access"
     },
-    "DatabaseEndpoint" : {
-      "Value" : { "Fn::GetAtt": [ "DBCluster", "Endpoint.Address" ] },
-      "Description" : "Database Endpoint"
-    },
     "WebsiteURL" : {
     "Value" : { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}, "/" ]]},
     "Description" : "WordPress Website URL"

@@ -1,6 +1,0 @@
-- name: Ensure nginx is installed.
-  yum:
-    name: "{{ server_type }}"
-    state: present
-- name: restart nginx
-  service: name="{{ server_type }}" state=restarted
