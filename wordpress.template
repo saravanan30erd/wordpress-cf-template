@@ -217,7 +217,7 @@
     },
     "WPTitle": {
       "Description" : "Provide Title for the WordPress site",
-      "Default" : "Hello World",
+      "Default" : "HelloWorld",
       "Type": "String"
     },
     "WPAdminUser": {
